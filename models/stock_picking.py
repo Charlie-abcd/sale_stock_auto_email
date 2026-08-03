@@ -32,6 +32,7 @@ class StockPicking(models.Model):
         return self.partner_id
 
     def _send_auto_delivery_email(self):
+        """Post in chatter + send email (same pattern as stock native confirmation)."""
         template = self.env.ref(
             "sale_stock_auto_email.mail_template_picking_done",
             raise_if_not_found=False,
@@ -47,14 +48,9 @@ class StockPicking(models.Model):
             if not partner.email:
                 continue
 
-            email_values = None
-            # Template defaults to picking.partner_id; override when we fell back.
-            if partner != picking.partner_id:
-                email_values = {"email_to": partner.email}
-
-            template.send_mail(
-                picking.id,
-                force_send=True,
-                raise_exception=False,
-                email_values=email_values,
+            picking.with_context(force_send=True).message_post_with_source(
+                template,
+                email_layout_xmlid="mail.mail_notification_light",
+                subtype_xmlid="mail.mt_comment",
+                partner_ids=partner.ids,
             )
