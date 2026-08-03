@@ -6,21 +6,55 @@ from odoo import models
 class StockPicking(models.Model):
     _inherit = "stock.picking"
 
-    def button_validate(self):
-        res = super().button_validate()
+    def _action_done(self):
+        """Send the delivery email only when the transfer is actually done.
+
+        ``button_validate`` often returns a wizard (backorder / immediate
+        transfer) before the picking reaches state ``done``. Hooking
+        ``_action_done`` guarantees the email is sent exactly once, after a
+        successful validation — including wizard-based flows.
+        """
+        res = super()._action_done()
+        self._send_auto_delivery_email()
+        return res
+
+    def _get_auto_email_partner(self):
+        """Resolve a partner that has an email (delivery address often has none)."""
+        self.ensure_one()
+        if self.partner_id.email:
+            return self.partner_id
+        sale_partner = self.sale_id.partner_id if self.sale_id else self.env["res.partner"]
+        if sale_partner.email:
+            return sale_partner
+        commercial = self.partner_id.commercial_partner_id
+        if commercial.email:
+            return commercial
+        return self.partner_id
+
+    def _send_auto_delivery_email(self):
         template = self.env.ref(
             "sale_stock_auto_email.mail_template_picking_done",
             raise_if_not_found=False,
         )
-        if template:
-            for picking in self:
-                # Only for outgoing deliveries (customer shipments)
-                if picking.picking_type_code != "outgoing":
-                    continue
+        if not template:
+            return
 
-                partner = picking.partner_id
-                if not partner or not partner.email:
-                    continue
+        outgoing_done = self.filtered(
+            lambda p: p.state == "done" and p.picking_type_code == "outgoing"
+        )
+        for picking in outgoing_done:
+            partner = picking._get_auto_email_partner()
+            if not partner.email:
+                continue
 
-                template.send_mail(picking.id, force_send=True, raise_exception=False)
-        return res
+            email_values = None
+            # Template defaults to picking.partner_id; override when we fell back.
+            if partner != picking.partner_id:
+                email_values = {"email_to": partner.email}
+
+            template.send_mail(
+                picking.id,
+                force_send=True,
+                raise_exception=False,
+                email_values=email_values,
+            )

@@ -5,14 +5,17 @@
             <field name="name">Sales Order Confirmed - Auto Email</field>
             <field name="model_id" ref="sale.model_sale_order"/>
             <field name="subject">Confirmation de commande {{ object.name }}</field>
-            <field name="email_from">"{{ object.company_id.name }}" &lt;{{ (object.company_id.email or user.email) }}&gt;</field>
-            <field name="email_to">{{ object.partner_id.email or '' }}</field>
+            <field name="email_from">{{ (object.company_id.email_formatted or user.email_formatted) }}</field>
+            <field name="email_to">{{ object.partner_id.email or object.partner_invoice_id.email or '' }}</field>
+            <field name="lang">{{ object.partner_id.lang }}</field>
             <field name="auto_delete" eval="True"/>
+            <field name="report_template_ids" eval="[(4, ref('sale.action_report_saleorder'))]"/>
             <field name="body_html" type="html">
-<div style="font-family: Arial, sans-serif;">
+<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
     <p>Bonjour <t t-out="object.partner_id.name or ''"/>,</p>
-    <p>Votre commande <strong><t t-out="object.name"/></strong> a été validée.</p>
+    <p>Votre commande <strong><t t-out="object.name"/></strong> a été confirmée.</p>
     <p>Montant total : <strong><t t-out="format_amount(object.amount_total, object.currency_id)"/></strong></p>
+    <p>Vous trouverez le bon de commande en pièce jointe.</p>
     <p>Merci pour votre confiance.</p>
     <p><t t-out="object.company_id.name"/></p>
 </div>
@@ -23,14 +26,20 @@
             <field name="name">Delivery Confirmed - Auto Email</field>
             <field name="model_id" ref="stock.model_stock_picking"/>
             <field name="subject">Confirmation expédition {{ object.name }}</field>
-            <field name="email_from">"{{ object.company_id.name }}" &lt;{{ (object.company_id.email or user.email) }}&gt;</field>
-            <field name="email_to">{{ object.partner_id.email or '' }}</field>
+            <field name="email_from">{{ (object.company_id.email_formatted or user.email_formatted) }}</field>
+            <field name="email_to">{{ object.partner_id.email or (object.sale_id.partner_id.email if object.sale_id else '') or '' }}</field>
+            <field name="lang">{{ object.partner_id.lang or (object.sale_id.partner_id.lang if object.sale_id else '') }}</field>
             <field name="auto_delete" eval="True"/>
+            <field name="report_template_ids" eval="[(4, ref('stock.action_report_delivery'))]"/>
             <field name="body_html" type="html">
-<div style="font-family: Arial, sans-serif;">
-    <p>Bonjour <t t-out="object.partner_id.name or ''"/>,</p>
+<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+    <p>Bonjour <t t-out="object.partner_id.name or (object.sale_id.partner_id.name if object.sale_id else '') or ''"/>,</p>
     <p>Votre commande a été expédiée.</p>
+    <t t-if="object.sale_id">
+        <p>Commande : <strong><t t-out="object.sale_id.name"/></strong></p>
+    </t>
     <p>Référence expédition : <strong><t t-out="object.name"/></strong></p>
+    <p>Vous trouverez le bon de livraison en pièce jointe.</p>
     <p>Merci.</p>
     <p><t t-out="object.company_id.name"/></p>
 </div>
